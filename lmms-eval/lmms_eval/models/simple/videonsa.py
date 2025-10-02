@@ -15,7 +15,7 @@ import os
 
 from transformers import AutoTokenizer
 
-from ..qwen25_vl.modeling_qwen2_5_vl import DonerightForConditionalGeneration
+from ..qwen25_vl.modeling_qwen2_5_vl import VideoNSAForConditionalGeneration
 from ..qwen25_vl.processing_qwen2_5_vl import Qwen2_5_VLProcessor
 
 from lmms_eval import utils
@@ -33,8 +33,8 @@ from lmms_eval.models.model_utils.reasoning_model_utils import (
 
 from lmms_eval.models.qwen25_vl.vision_process import process_vision_info
 
-@register_model("doneright")
-class DoneRight(lmms):
+@register_model("videonsa")
+class VideoNSA(lmms):
     """
     Qwen2.5_VL Model
     "https://huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct"
@@ -102,13 +102,10 @@ class DoneRight(lmms):
             model_kwargs["attn_implementation"] = attn_implementation
 
         # Debug output to verify arguments
-        print(f"DEBUG: DoneRight parameters: block_counts={self.block_counts}, window_size={self.window_size}")
+        print(f"DEBUG: VideoNSA parameters: block_counts={self.block_counts}, window_size={self.window_size}")
 
         # Load model first, then modify the config
-        self._model = DonerightForConditionalGeneration.from_pretrained(pretrained, **model_kwargs).eval()
-
-        # Enable prefill runtime tracking
-        self._model.enable_prefill_runtime_tracking()
+        self._model = VideoNSAForConditionalGeneration.from_pretrained(pretrained, **model_kwargs).eval()
 
         # Directly update the config values after loading
         if self.block_counts is not None:
@@ -425,9 +422,6 @@ class DoneRight(lmms):
                     current_gen_kwargs["temperature"] = None
                     current_gen_kwargs["top_p"] = None
 
-                # Reset prefill runtime tracking before generation
-                self.model.reset_prefill_runtime()
-
                 cont = self.model.generate(
                     **inputs,
                     eos_token_id=self.tokenizer.eos_token_id,
@@ -439,17 +433,6 @@ class DoneRight(lmms):
                     max_new_tokens=current_gen_kwargs["max_new_tokens"],
                     use_cache=self.use_cache,
                 )
-
-                # Report prefill runtime after generation
-                prefill_runtime = self.model.get_prefill_runtime()
-                if prefill_runtime is not None:
-                    eval_logger.info(f"Prefill Runtime: {prefill_runtime:.6f} seconds")
-                    # Force output to ensure visibility in distributed settings
-                    print(f"DONERIGHT_PREFILL_RUNTIME: {prefill_runtime:.6f} seconds")
-                    import sys
-                    sys.stdout.flush()
-                    print(f"DONERIGHT_PREFILL_RUNTIME: {prefill_runtime:.6f} seconds", file=sys.stderr)
-                    sys.stderr.flush()
 
                 generated_ids_trimmed = [out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, cont)]
                 answers = self.processor.batch_decode(generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False)

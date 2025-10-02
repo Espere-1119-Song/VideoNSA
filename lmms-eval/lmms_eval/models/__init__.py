@@ -21,7 +21,7 @@ AVAILABLE_SIMPLE_MODELS = {
     "batch_gpt4": "BatchGPT4",
     "claude": "Claude",
     "cogvlm2": "CogVLM2",
-    "doneright": "DoneRight",
+    "videonsa": "VideoNSA",
     "from_log": "FromLog",
     "fuyu": "Fuyu",
     "gemini_api": "GeminiAPI",
