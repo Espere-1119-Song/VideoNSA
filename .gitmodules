@@ -1,0 +1,3 @@
+[submodule "ms-swift"]
+	path = ms-swift
+	url = https://github.com/modelscope/ms-swift.git
