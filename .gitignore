@@ -1,0 +1,30 @@
+# 大文件和模型目录
+ms-swift/huggingface_model/
+ms-swift/attention_outputs/
+ms-swift/new_data/
+ms-swift/VideoNSA-code-tmp/
+ms-swift/kubectl/
+ms-swift/debug_attention_outputs/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+test_gpt_api.py
