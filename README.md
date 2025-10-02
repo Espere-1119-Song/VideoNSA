@@ -14,8 +14,10 @@ VideoNSA is a learnable, hardware-aware sparse-attention framework for efficient
 
 ## News
 
-- **[2025-10]** VideoNSA code and models released
+- **[2025-10]** Paper released on arXiv
+- **[2025-10]** Code and models released
 - **[2025-10]** Project website launched
+- **[TODO]** Training dataset release
 
 ## Installation
 
