@@ -815,15 +815,7 @@ class Qwen2_5_VLFlashAttention2(Qwen2_5_VLAttention):
         key_states = repeat_kv(key_states, self.num_key_value_groups)
         value_states = repeat_kv(value_states, self.num_key_value_groups)
         dropout_rate = 0.0 if not self.training else self.attention_dropout
-
-
-        # 检查全局状态
-        import os
-        rank = os.environ.get('RANK', 'unknown')
-        local_rank = os.environ.get('LOCAL_RANK', 'unknown')
-        print(f"[RANK {rank}:{local_rank}] [_mixed_attention] DEBUG: self.training = {self.training}")
-        print(f"[RANK {rank}:{local_rank}] [_mixed_attention] DEBUG: torch.is_grad_enabled() = {torch.is_grad_enabled()}")
-                        
+   
         # In PEFT, usually we cast the layer norms in float32 for training stability reasons
         # therefore the input hidden states gets silently casted in float32. Hence, we need
         # cast them back in float16 just to be sure everything works as expected.
@@ -875,8 +867,6 @@ class Qwen2_5_VLFlashAttention2(Qwen2_5_VLAttention):
 
         attn_output = attn_output.reshape(bsz, q_len, -1).contiguous()
         attn_output = self.o_proj(attn_output)
-
-        print(f"q_proj.weight (前3个): {self.q_proj.weight[:3, 0].detach().cpu().tolist()}")
 
         if not output_attentions:
             attn_weights = None
@@ -984,7 +974,7 @@ class Qwen2_5_VLMixNSA(Qwen2_5_VLAttention):
         num_kv_heads: Optional[int] = 4,
         block_size: Optional[int] = 64,
         block_counts: Optional[Union[torch.LongTensor, int]] = 32,
-        window_size: Optional[int] = 512,
+        window_size: Optional[int] = 256,
         max_position_embeddings: Optional[int] = None,
         vision_token_start_id: Optional[int] = None,
         vision_token_end_id: Optional[int] = None,
@@ -1012,7 +1002,7 @@ class Qwen2_5_VLMixNSA(Qwen2_5_VLAttention):
         self.g_proj_1 = nn.Linear(self.hidden_size, self.hidden_size, bias=True)
         self.g_proj_2 = nn.Linear(self.hidden_size, self.num_heads * 3, bias=True)
         
-        # self._reset_gate_initialization()
+        self._reset_gate_initialization()
         
         self.g_proj_1.weight.requires_grad = True
         self.g_proj_1.bias.requires_grad = True
@@ -1228,90 +1218,14 @@ class Qwen2_5_VLMixNSA(Qwen2_5_VLAttention):
         
         attn_output = attn_output.transpose(1, 2)
 
-        if self.layer_idx == 0:
-            import os
-            rank = os.environ.get('RANK', 'unknown')
-            local_rank = os.environ.get('LOCAL_RANK', 'unknown')
-            if rank == '0':
-                print(f"[Layer {self.layer_idx}] [RANK {rank}:{local_rank}] [_nsa_attention] WARNING: g_cmp = {g_cmp.mean().item()}")
-                print(f"[Layer {self.layer_idx}] [RANK {rank}:{local_rank}] [_nsa_attention] WARNING: g_slc = {g_slc.mean().item()}")
-                print(f"[Layer {self.layer_idx}] [RANK {rank}:{local_rank}] [_nsa_attention] WARNING: g_swa = {g_swa.mean().item()}")
-            
         
         return attn_output
 
-
-    def _nsa_attention(self, query_states, key_states, value_states, hidden_states, attention_mask, q_len):
-        """纯NSA attention（复用Qwen2_5_VLNSA的逻辑）"""
-        bsz = query_states.size(0)
-        gate_hidden = F.gelu(self.g_proj_1(hidden_states))
-        gates = self.g_proj_2(gate_hidden).view(bsz, q_len, self.num_heads, 3)
-        gates = gates / self.gate_temperature
-        g_cmp, g_slc, g_swa = gates.sigmoid().unbind(-1)
-        
-        # 只打印requires_grad是False的情况
-        if self.layer_idx == 0:
-            import os
-            rank = os.environ.get('RANK', 'unknown')
-            local_rank = os.environ.get('LOCAL_RANK', 'unknown')
-
-            print(f"[RANK {rank}:{local_rank}] [_nsa_attention] WARNING: g_cmp = {g_cmp.mean().item()}")
-            print(f"[RANK {rank}:{local_rank}] [_nsa_attention] WARNING: g_slc = {g_slc.mean().item()}")
-            print(f"[RANK {rank}:{local_rank}] [_nsa_attention] WARNING: g_swa = {g_swa.mean().item()}")
-            
-            print(f"[RANK {rank}:{local_rank}] [_nsa_attention] WARNING: gates.requires_grad = False")
-            print(f"[RANK {rank}:{local_rank}] [_nsa_attention] WARNING: g_cmp.requires_grad = False")
-
-            print(f"[RANK {rank}:{local_rank}] [_nsa_attention] DEBUG: self.training = {self.training}")
-            print(f"[RANK {rank}:{local_rank}] [_nsa_attention] DEBUG: torch.is_grad_enabled() = {torch.is_grad_enabled()}")
-            
-
-        # 扩展gates
-        g_cmp_56 = torch.cat([g_cmp, g_cmp], dim=-1)
-        g_slc_56 = torch.cat([g_slc, g_slc], dim=-1)
-        g_swa_56 = torch.cat([g_swa, g_swa], dim=-1)
-        
-        zero_gates = torch.zeros(bsz, q_len, 8, device=g_cmp.device, dtype=g_cmp.dtype)
-        g_cmp_64 = torch.cat([g_cmp_56, zero_gates], dim=-1)
-        g_slc_64 = torch.cat([g_slc_56, zero_gates], dim=-1)
-        g_swa_64 = torch.cat([g_swa_56, zero_gates], dim=-1)
-        
-        # 扩展query_states
-        query_states_56 = torch.cat([query_states, query_states], dim=1)
-        zero_heads = torch.zeros(bsz, 8, q_len, self.head_dim,
-                                device=query_states.device, dtype=query_states.dtype)
-        query_states_padded = torch.cat([query_states_56, zero_heads], dim=1)
-        query_states_padded = query_states_padded.transpose(1, 2)
-        
-        key_states = key_states.transpose(1, 2)
-        value_states = value_states.transpose(1, 2)
-        
-        from nsa.nsa import nsa_func
-        attn_output = nsa_func(
-            query_states_padded, key_states, value_states,
-            g_cmp=g_cmp_64,
-            g_slc=g_slc_64,
-            g_swa=g_swa_64,
-            block_count=self.block_counts,
-            block_size=self.block_size,
-            window_size=self.window_size,
-            scale=None,
-            layer_idx=self.layer_idx  # 传入实际层索引
-        )
-
-            
-
-        front_28 = attn_output[:, :, :28, :]
-        copied_28 = attn_output[:, :, 28:56, :]
-        attn_output = (front_28 + copied_28) * 0.5
-        
-        return attn_output
-    
 
 
 QWEN2_5_VL_ATTENTION_CLASSES = {
     "eager": Qwen2_5_VLAttention,
-    "flash_attention_2": Qwen2_5_VLMixNSA, # Qwen2_5_VLMixNSA, #Qwen2_5_VLFlashAttention2,
+    "flash_attention_2": Qwen2_5_VLMixNSA, # Qwen2_5_VLFlashAttention2,
     "sdpa": Qwen2_5_VLSdpaAttention,
 }
 
@@ -1401,15 +1315,6 @@ class Qwen2_5_VLDecoderLayer(nn.Module):
 
         return outputs
     
-    def calibrate_nsa_to_full(self, sample_inputs: dict):
-        """
-        校准当前层的NSA attention（如果存在）
-        
-        Args:
-            sample_inputs: 包含样本数据的字典
-        """
-        if hasattr(self.self_attn, 'calibrate_nsa_to_full'):
-            self.self_attn.calibrate_nsa_to_full(sample_inputs)
 
 
 
@@ -1667,12 +1572,6 @@ class Qwen2_5_VLTextModel(Qwen2_5_VLPreTrainedModel):
         if inputs_embeds is None:
             inputs_embeds = self.embed_tokens(input_ids)
 
-        # 🔍 检查点A: 检查embeddings
-        # embed_nan = torch.isnan(inputs_embeds).any()
-        # if embed_nan:
-        #     print(f"🔴 EMBEDDINGS NaN detected!")
-        #     print(f"Embeddings stats: min={inputs_embeds.min():.4f}, max={inputs_embeds.max():.4f}")
-
         if cache_position is None:
             past_seen_tokens = past_key_values.get_seq_length() if past_key_values is not None else 0
             cache_position = torch.arange(
@@ -1685,33 +1584,15 @@ class Qwen2_5_VLTextModel(Qwen2_5_VLPreTrainedModel):
         elif position_ids.dim() == 2:
             position_ids = position_ids[None, ...].expand(3, position_ids.shape[0], -1)
 
-        # 🔍 检查点B: 检查position_ids
-        # pos_nan = torch.isnan(position_ids).any()
-        # if pos_nan:
-        #     print(f"🔴 POSITION_IDS NaN detected!")
-        #     print(f"Position IDs stats: min={position_ids.min():.4f}, max={position_ids.max():.4f}")
-
         causal_mask = self._update_causal_mask(
             attention_mask, inputs_embeds, cache_position, past_key_values, output_attentions
         )
 
         hidden_states = inputs_embeds
 
-        # 🔍 检查点C: 检查初始hidden_states
-        # initial_nan = torch.isnan(hidden_states).any()
-        # if initial_nan:
-        #     print(f"🔴 INITIAL HIDDEN_STATES NaN detected!")
-        #     print(f"Initial hidden stats: min={hidden_states.min():.4f}, max={hidden_states.max():.4f}")
-
         # create position embeddings to be shared across the decoder layers
         position_embeddings = self.rotary_emb(hidden_states, position_ids)
         
-        # 🔍 检查点D: 检查position_embeddings
-        # pos_emb_nan = any(torch.isnan(pe).any() for pe in position_embeddings)
-        # if pos_emb_nan:
-        #     print(f"🔴 POSITION_EMBEDDINGS NaN detected!")
-        #     print(f"Position embeddings contain NaN!")
-
         # decoder layers
         all_hidden_states = () if output_hidden_states else None
         all_self_attns = () if output_attentions else None
@@ -1925,33 +1806,6 @@ class Qwen2_5_VLTextModel(Qwen2_5_VLPreTrainedModel):
                 )
         return causal_mask
     
-    def calibrate_nsa_to_full(self, sample_inputs: dict):
-        """
-        对所有LLM层进行NSA校准
-        
-        Args:
-            sample_inputs: 包含样本数据的字典，格式：
-                {
-                    'query_states': torch.Tensor,  # [B, H, M, D]
-                    'key_states': torch.Tensor,    # [B, H, N, D]
-                    'value_states': torch.Tensor,  # [B, H, N, D]
-                    'vision_mask': torch.Tensor,   # [B, M] - vision token位置
-                    'attention_mask': torch.Tensor # [B, M, N] - attention mask
-                }
-        """
-        calibrated_count = 0
-        
-        for layer_idx, layer in enumerate(self.layers):
-            if hasattr(layer, 'calibrate_nsa_to_full'):
-                try:
-                    layer.calibrate_nsa_to_full(sample_inputs)
-                    calibrated_count += 1
-                except Exception as e:
-                    print(f"警告：第{layer_idx}层NSA校准失败: {e}")
-        
-        print(f"✓ NSA校准完成，共校准了 {calibrated_count}/{len(self.layers)} 层")
-
-
 @auto_docstring
 class Qwen2_5_VLModel(Qwen2_5_VLPreTrainedModel):
     base_model_prefix = ""
@@ -2319,18 +2173,6 @@ class Qwen2_5_VLModel(Qwen2_5_VLPreTrainedModel):
         )
         return output if return_dict else output.to_tuple()
     
-    def calibrate_nsa_to_full(self, sample_inputs: dict):
-        """
-        对整个模型中的所有LLM层进行NSA校准
-        
-        Args:
-            sample_inputs: 包含样本数据的字典
-        """
-        if hasattr(self.language_model, 'calibrate_nsa_to_full'):
-            self.language_model.calibrate_nsa_to_full(sample_inputs)
-        else:
-            print("警告：language_model 不支持NSA校准")
-
 
 @dataclass
 class Qwen2_5_VLCausalLMOutputWithPast(ModelOutput):
@@ -2371,7 +2213,7 @@ class Qwen2_5_VLCausalLMOutputWithPast(ModelOutput):
     rope_deltas: Optional[torch.LongTensor] = None
 
 
-class DonerightForConditionalGeneration(Qwen2_5_VLPreTrainedModel, GenerationMixin):
+class VideoNSAForConditionalGeneration(Qwen2_5_VLPreTrainedModel, GenerationMixin):
     _checkpoint_conversion_mapping = {
         "^visual": "model.visual",
         r"^model(?!\.(language_model|visual))": "model.language_model",
@@ -2744,27 +2586,6 @@ class DonerightForConditionalGeneration(Qwen2_5_VLPreTrainedModel, GenerationMix
                 )
 
         return causal_mask
-    
-    def calibrate_nsa_to_full(self, sample_inputs: dict):
-        """
-        对模型中的所有LLM层进行NSA校准
-        
-        Args:
-            sample_inputs: 包含样本数据的字典，格式：
-                {
-                    'query_states': torch.Tensor,  # [B, H, M, D]
-                    'key_states': torch.Tensor,    # [B, H, N, D]  
-                    'value_states': torch.Tensor,  # [B, H, N, D]
-                    'vision_mask': torch.Tensor,   # [B, M] - vision token位置
-                    'attention_mask': torch.Tensor # [B, M, N] - attention mask
-                }
-        """
-        if hasattr(self.model, 'calibrate_nsa_to_full'):
-            self.model.calibrate_nsa_to_full(sample_inputs)
-            print("✓ NSA校准已完成，现在可以开始训练")
-        else:
-            print("警告：模型不支持NSA校准")
 
-
-__all__ = ["DonerightForConditionalGeneration", "Qwen2_5_VLModel", "Qwen2_5_VLPreTrainedModel", "Qwen2_5_VLTextModel"]
+__all__ = ["VideoNSAForConditionalGeneration", "Qwen2_5_VLModel", "Qwen2_5_VLPreTrainedModel", "Qwen2_5_VLTextModel"]
 
