@@ -28,3 +28,10 @@ venv/
 # Git
 .git/
 test_gpt_api.py
+
+# Results and outputs
+lmms-eval/nsa_results/
+lmms-eval/results/
+lmms-eval/clock_results*/
+*.mp4
+*.html
