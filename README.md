@@ -6,7 +6,7 @@
 
 <div align="center">
 
-[[Paper](https://arxiv.org/abs/TODO)] [[Project Page](https://enxinsong.com/VideoNSA-web/)] [[Model](https://huggingface.co/Enxin/VideoNSA)]
+[[Paper](https://arxiv.org/abs/2510.02295)] [[Project Page](https://enxinsong.com/VideoNSA-web/)] [[Model](https://huggingface.co/Enxin/VideoNSA)]
 
 </div>
 
@@ -121,10 +121,14 @@ bash ../scrips/baselines.sh
 ## Citation
 
 ```bibtex
-@misc{chai2025auroracapefficientperformantvideo,
-      title={AuroraCap: Efficient, Performant Video Detailed Captioning},
-      author={Wenhao Chai et al.},
-      year={2025}
+@misc{song2025videonsanativesparseattention,
+      title={VideoNSA: Native Sparse Attention Scales Video Understanding},
+      author={Enxin Song and Wenhao Chai and Shusheng Yang and Ethan Armand and Xiaojun Shan and Haiyang Xu and Jianwen Xie and Zhuowen Tu},
+      year={2025},
+      eprint={2510.02295},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={https://arxiv.org/abs/2510.02295},
 }
 ```
 
