@@ -17,11 +17,18 @@ VideoNSA is a learnable, hardware-aware sparse-attention framework for efficient
 - **[2025-10]** Paper released on arXiv
 - **[2025-10]** Code and models released
 - **[2025-10]** Project website launched
-- **[TODO]** Training dataset release
 
 ## Installation
 
 ### For Training
+
+Currently, we build on existing open-source implementations to support training:
+
+- **FLA**: [flash-linear-attention](https://github.com/fla-org/flash-linear-attention/tree/main)  
+- **Tilde**: [nsa-impl](https://github.com/tilde-research/nsa-impl/tree/main)  
+
+We also recommend exploring [Scalable-Flash-Native-Sparse-Attention](https://github.com/mdy666/Scalable-Flash-Native-Sparse-Attention), which provides a highly optimized and scalable implementation of native sparse attention.
+
 
 ```bash
 # Clone the repository
@@ -117,6 +124,9 @@ bash ../scrips/baselines.sh
 ```
 
 **Note**: Modify the baseline script to select different sparse attention methods and configure their parameters.
+
+## TODO
+-  Training dataset release
 
 ## Citation
 
