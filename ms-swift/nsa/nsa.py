@@ -69,7 +69,8 @@ def nsa_func(
     N_block = k_cmp.shape[1] 
 
     def cmp_mask(b, h, q_idx, kv_idx):
-        return q_idx <= (kv_idx + 1) * block_size - 1
+        q_blk = q_idx // block_size      
+        return kv_idx <= q_blk           
 
     block_mask = create_block_mask(cmp_mask, B, H, M, N_block)
     # Ensure block_mask is on the same device as the input tensors
