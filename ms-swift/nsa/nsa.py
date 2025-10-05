@@ -13,10 +13,6 @@ from fla.ops.nsa.parallel import parallel_nsa_topk
 from .compression import compression_attention
 from .selection import selection_attention
 
-# Global timing collection for statistics
-_layer_timings = {}  # {layer_idx: {'compression': [], 'selection': [], 'sliding_window': [], 'total': []}}
-_timing_stats = {'compression': [], 'selection': [], 'sliding_window': [], 'total': []}
-
 
 def nsa_func(
     q: torch.Tensor,
