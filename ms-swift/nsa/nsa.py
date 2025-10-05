@@ -32,7 +32,7 @@ def nsa_func(
     window_size: int = 0,
     scale: Optional[float] = None,
     return_attn_weights: bool = False,
-    layer_idx: Optional[int] = None,  # 新增层索引参数
+    layer_idx: Optional[int] = None,  
 ) -> Union[torch.Tensor, Tuple[torch.Tensor, dict]]:
     # Declare global variables at the beginning of function
     global _layer_timings, _timing_stats
@@ -66,8 +66,7 @@ def nsa_func(
     k_cmp = k_cmp.to(q.device)
     v_cmp = v_cmp.to(q.device)
 
-    # 使用 k_cmp 的实际长度来创建 block_mask
-    N_block = k_cmp.shape[1]  # 实际的块数量
+    N_block = k_cmp.shape[1] 
 
     def cmp_mask(b, h, q_idx, kv_idx):
         return q_idx <= (kv_idx + 1) * block_size - 1
