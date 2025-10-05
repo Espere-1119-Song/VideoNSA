@@ -1143,25 +1143,21 @@ class Qwen2_5_VLMixNSA(Qwen2_5_VLAttention):
         query_64[:, 28:56] = vision_only_q
         query_states_padded = query_64.transpose(1, 2).contiguous()
 
-        try:
-            from nsa.nsa import nsa_func
-        except ImportError:
-            # Fallback to zero output if NSA is not available
-            nsa_output = torch.zeros_like(query_states.transpose(1, 2))
-        else:
-            vision_k_transposed = vision_only_k.transpose(1, 2).contiguous()
-            vision_v_transposed = vision_only_v.transpose(1, 2).contiguous()
+        from nsa.nsa import nsa_func
 
-            nsa_output_64 = nsa_func(
-                query_states_padded, vision_k_transposed, vision_v_transposed,
-                g_cmp=g_cmp_64.contiguous(), g_slc=g_slc_64.contiguous(), g_swa=g_swa_64.contiguous(),
-                block_count=self.block_counts, block_size=self.block_size,
-                window_size=self.window_size, scale=None, layer_idx=self.layer_idx
-            )
+        vision_k_transposed = vision_only_k.transpose(1, 2).contiguous()
+        vision_v_transposed = vision_only_v.transpose(1, 2).contiguous()
 
-            nsa_output_64[:, :, :28, :] += nsa_output_64[:, :, 28:56, :]
-            nsa_output_64[:, :, :28, :] *= 0.5
-            nsa_output = nsa_output_64[:, :, :28, :].transpose(1, 2)
+        nsa_output_64 = nsa_func(
+            query_states_padded, vision_k_transposed, vision_v_transposed,
+            g_cmp=g_cmp_64.contiguous(), g_slc=g_slc_64.contiguous(), g_swa=g_swa_64.contiguous(),
+            block_count=self.block_counts, block_size=self.block_size,
+            window_size=self.window_size, scale=None, layer_idx=self.layer_idx
+        )
+
+        nsa_output_64[:, :, :28, :] += nsa_output_64[:, :, 28:56, :]
+        nsa_output_64[:, :, :28, :] *= 0.5
+        nsa_output = nsa_output_64[:, :, :28, :].transpose(1, 2)
 
         text_only_q = query_states * text_mask
 
