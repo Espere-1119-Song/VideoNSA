@@ -14,8 +14,8 @@ VideoNSA is a learnable, hardware-aware sparse-attention framework for efficient
 
 ## News
 
-- **[2025-10]** Paper released on arXiv
-- **[2025-10]** Code and models released
+- **[2025-10]** We release our training data in [Huggingface](https://huggingface.co/datasets/Enxin/VideoNSA-data).
+- **[2025-10]** Code and [model](https://huggingface.co/Enxin/VideoNSA) released. Paper released on [arXiv](https://arxiv.org/abs/2510.02295).
 - **[2025-10]** Project website launched
 
 ## Installation
